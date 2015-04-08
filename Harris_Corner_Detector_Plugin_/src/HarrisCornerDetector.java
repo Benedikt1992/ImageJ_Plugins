@@ -17,9 +17,9 @@ public class HarrisCornerDetector {
 	
 	final int border = 20;
 	
-	float[] pfilt = {0.223755f,0.552490f,0.223755f}; //Hp
-	float[] dfilt = {0.453014f,0.0f,-0.453014f}; //Hdx, Hdy
-	float[] bfilt = {0.01563f,0.09375f,0.234375f,0.3125f,0.234375f,0.09375f,0.01563f}; //Hb, Gauﬂ-Filter
+	float[] pfilt = {0.223755f,0.552490f,0.223755f}; //Hp, entspricht Vorgl‰ttung
+	float[] dfilt = {0.453014f,0.0f,-0.453014f}; //Hdx, Hdy, entspricht partieller Ableitung in x bzw. y Richtung
+	float[] bfilt = {0.01563f,0.09375f,0.234375f,0.3125f,0.234375f,0.09375f,0.01563f}; //Hb, entspricht Gauﬂ-Filter
 	
 	ImageProcessor ipOrig;
 	FloatProcessor A;
@@ -50,8 +50,8 @@ public class HarrisCornerDetector {
 		FloatProcessor Ix = (FloatProcessor) ipOrig.convertToFloat();
 		FloatProcessor Iy = (FloatProcessor) ipOrig.convertToFloat();
 		
-		Ix = convolve1h(convolve1h(Ix,pfilt),dfilt);
-		Iy = convolve1v(convolve1v(Iy,pfilt),dfilt);
+		Ix = faltung1horizontal(faltung1horizontal(Ix,pfilt),dfilt);
+		Iy = faltung1vertikal(faltung1vertikal(Iy,pfilt),dfilt);
 		
 		//Erechne Elemente der lokalen Strukturmatrix M = ((A,C),(C,B))
 		A= sqr((FloatProcessor) Ix.duplicate());
@@ -59,15 +59,16 @@ public class HarrisCornerDetector {
 		C= mult((FloatProcessor) Ix.duplicate(),Iy);
 		
 		//Gl‰ttung mit linearem Gauﬂ-Filter (Faltung)
-		A = convolve2(A,bfilt);
-		B = convolve2(B,bfilt);
-		C = convolve2(C,bfilt);
+		A = faltung2(A,bfilt);
+		B = faltung2(B,bfilt);
+		C = faltung2(C,bfilt);
 	}
 	
 	private void makeCrf() {
 		int w = ipOrig.getWidth();
 		int h = ipOrig.getHeight();
 		
+		//Corner Response Function: Q(u,v)=(A*B-C^2)-alpha*(A+B)^2 = det(M)-alpha*(trace(m))^2
 		Q = new FloatProcessor(w,h);
 		
 		float[] Apix = (float[]) A.getPixels();
@@ -77,27 +78,27 @@ public class HarrisCornerDetector {
 		
 		for (int v = 0; v < h; v++) {
 			for (int u = 0; u < w; u++) {
-				int i = v*w+u;
-				float a = Apix[i];
-				float b=Bpix[i];
-				float c=Cpix[i];
+				int i = v*w+u; // entspricht Q(u,v) bzw. M(u,v)
+				float a = Apix[i]; //A(u,v)
+				float b=Bpix[i]; //B(u,v)
+				float c=Cpix[i]; //C(u,v)
 				
-				float det = a*b-c*c;
-				float trace = a+b;
+				float det = a*b-c*c; //det(M(u,v)) f¸r je ein Element (<-u,v)
+				float trace = a+b; //trace(M(u,v)) f¸r je ein Element (<-u,v)
 				Qpix[i] = det - alpha * (trace*trace);
 			}
 		}
 	}
 	
 	@SuppressWarnings("unchecked")
-	private Vector<Corner> collectCornersWith(int inputBorder) {
+	private Vector<Corner> collectCornersWith(int schwellwert) {
 		Vector<Corner> cornerList = new Vector<Corner>(1000);
 		int w = Q.getWidth();
 		int h = Q.getHeight();
 		float[] Qpix = (float[]) Q.getPixels();
 		
-		for (int v = inputBorder; v < h-inputBorder; v++) {
-			for (int u = inputBorder; u < w-inputBorder; u++) {
+		for (int v = schwellwert; v < h-schwellwert; v++) {
+			for (int u = schwellwert; u < w-schwellwert; u++) {
 				float q = Qpix[v*w+u];
 				if(q>threshold && isLocalMax(Q,u,v))
 				{
@@ -106,6 +107,8 @@ public class HarrisCornerDetector {
 				}
 			}
 		}
+		
+		//Ecken absteigend nach ihrer St‰rke sortieren
 		Collections.sort(cornerList);
 		return cornerList;
 	}
@@ -161,7 +164,7 @@ public class HarrisCornerDetector {
 		
 	//Hilfsfunktionen
 	
-	static FloatProcessor convolve1h (FloatProcessor p, float[] h)
+	static FloatProcessor faltung1horizontal (FloatProcessor p, float[] h)
 	{
 		Convolver conv = new Convolver();
 		conv.setNormalize(false);
@@ -170,7 +173,7 @@ public class HarrisCornerDetector {
 	}
 	
 	
-	static FloatProcessor convolve1v (FloatProcessor p, float[] h)
+	static FloatProcessor faltung1vertikal (FloatProcessor p, float[] h)
 	{
 		Convolver conv = new Convolver();
 		conv.setNormalize(false);
@@ -178,10 +181,10 @@ public class HarrisCornerDetector {
 		return p;
 	}
 	
-	static FloatProcessor convolve2 (FloatProcessor p, float[] h)
+	static FloatProcessor faltung2 (FloatProcessor p, float[] h)
 	{
-		convolve1h(p, h);
-		convolve1v(p, h);
+		faltung1horizontal(p, h);
+		faltung1vertikal(p, h);
 		return p;
 	}
 	
@@ -211,15 +214,15 @@ public class HarrisCornerDetector {
 		else 
 		{
 			float[] pix = (float[]) fp.getPixels();
-			int i0 = (v-1)*w+u; //Spalte oben dran
-			int i1 = v*w+u; //Spalte
-			int i2 = (v+1)*w+u; //Spalte unten dran
+			int i0 = (v-1)*w+u; //(u,v-1)
+			int i1 = v*w+u; //(u,v)
+			int i2 = (v+1)*w+u; //(u,v+1)
 			
-			float cp = pix[i1];
-			return //Maske
-					cp > pix[i0-1] && cp > pix[i0] && cp > pix[i0+1] &&
-					cp > pix[i1-1] && 					cp > pix[i1+1] &&
-					cp > pix[i2-1] && cp > pix[i2] && cp > pix[i2+1];
+			float currentPoint = pix[i1];
+			return //currentPoint > 8er-Nachbarschaft?
+					currentPoint > pix[i0-1] && currentPoint > pix[i0] && currentPoint > pix[i0+1] &&
+					currentPoint > pix[i1-1] && 					currentPoint > pix[i1+1] &&
+					currentPoint > pix[i2-1] && currentPoint > pix[i2] && currentPoint > pix[i2+1];
 					
 		}
 	}
