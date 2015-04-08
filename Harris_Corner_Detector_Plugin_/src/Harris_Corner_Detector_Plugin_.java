@@ -8,7 +8,6 @@ public class Harris_Corner_Detector_Plugin_ implements PlugInFilter {
 	ImagePlus imp;
 	static float alpha = HarrisCornerDetector.DEFAULT_ALPHA;
 	static int threshold = HarrisCornerDetector.DEFAULT_THRESHOLD;
-	static int nmax = 0;
 
 	public int setup(String arg, ImagePlus imp) {
 		IJ.register(Harris_Corner_Detector_Plugin_.class);
@@ -37,7 +36,6 @@ public class Harris_Corner_Detector_Plugin_ implements PlugInFilter {
 		int def_threshold = HarrisCornerDetector.DEFAULT_THRESHOLD;
 		dlg.addNumericField("Threshold (default: " + def_threshold + ")",
 				threshold, 0);
-		dlg.addNumericField("Max. points (0 = show all)", nmax, 0);
 		dlg.showDialog();
 		if (dlg.wasCanceled())
 			return false;
@@ -47,7 +45,6 @@ public class Harris_Corner_Detector_Plugin_ implements PlugInFilter {
 		}
 		alpha = (float) dlg.getNextNumber();
 		threshold = (int) dlg.getNextNumber();
-		nmax = (int) dlg.getNextNumber();
 		return true;
 	}
 
