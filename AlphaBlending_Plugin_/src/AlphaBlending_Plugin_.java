@@ -77,7 +77,6 @@ public class AlphaBlending_Plugin_ implements PlugInFilter {
 
 	@Override
 	public int setup(String arg, ImagePlus imp) {
-		// TODO Auto-generated method stub
-		return 0;
+		return DOES_8G;
 	}
 }
